@@ -1,0 +1,23 @@
+name: release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: macos-15 # arm64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build deps
+        run: brew install pkgconf openssl@3
+      - name: Build and verify
+        run: TAG="${GITHUB_REF_NAME}" ./build.sh
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes "$(printf 'Patched OpenVPN for AWS Client VPN SAML federation (see README).\n\n%s\n\n```\n%s\n```' "$(cat dist/BUILDINFO)" "$(cat dist/SHA256SUMS)")" \
+            dist/openvpn-aws-*.tar.gz

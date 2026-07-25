@@ -1,0 +1,56 @@
+name: watch-upstream
+on:
+  schedule:
+    - cron: "17 21 * * *" # daily
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  check:
+    runs-on: macos-15 # arm64, same environment the build uses
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare pinned versions with upstream
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          source ./versions.env
+          latest_openvpn="$(gh api repos/OpenVPN/openvpn/releases/latest --jq .tag_name | sed 's/^v//')"
+          current_openssl="$(brew info --json=v2 --formula openssl@3 | jq -r '.formulae[0].versions.stable')"
+          echo "OpenVPN: pinned ${OPENVPN_VERSION}, upstream ${latest_openvpn}"
+          echo "OpenSSL: last built ${LAST_BUILT_OPENSSL}, brew ${current_openssl}"
+          {
+            echo "openvpn_new=${latest_openvpn}"
+            echo "openssl_new=${current_openssl}"
+            if [ "${latest_openvpn}" != "${OPENVPN_VERSION}" ] || [ "${current_openssl}" != "${LAST_BUILT_OPENSSL}" ]; then
+              echo "bump=true"
+            else
+              echo "bump=false"
+            fi
+          } >>"$GITHUB_OUTPUT"
+      - name: Open bump PR
+        if: steps.check.outputs.bump == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPENVPN_NEW: ${{ steps.check.outputs.openvpn_new }}
+          OPENSSL_NEW: ${{ steps.check.outputs.openssl_new }}
+        run: |
+          branch="bump/openvpn-${OPENVPN_NEW}-openssl-${OPENSSL_NEW}"
+          if gh pr list --head "$branch" --state open --json number --jq length | grep -qv '^0$'; then
+            echo "bump PR already open"; exit 0
+          fi
+          sha256="$(curl -fsSL "https://swupdate.openvpn.org/community/releases/openvpn-${OPENVPN_NEW}.tar.gz" | shasum -a 256 | awk '{print $1}')"
+          sed -i '' \
+            -e "s/^OPENVPN_VERSION=.*/OPENVPN_VERSION=${OPENVPN_NEW}/" \
+            -e "s/^OPENVPN_SHA256=.*/OPENVPN_SHA256=${sha256}/" \
+            -e "s/^LAST_BUILT_OPENSSL=.*/LAST_BUILT_OPENSSL=${OPENSSL_NEW}/" \
+            versions.env
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git commit -am "Bump to OpenVPN ${OPENVPN_NEW} / OpenSSL ${OPENSSL_NEW}"
+          git push -u origin "$branch"
+          gh pr create --title "Bump to OpenVPN ${OPENVPN_NEW} / OpenSSL ${OPENSSL_NEW}" \
+            --body "$(printf 'Automated upstream bump. CI proves the buffer patch still applies and the build passes.\n\nAfter merging, tag to release:\n\n```\ngit tag v%s-0 && git push origin v%s-0\n```\n(bump the trailing build number instead if OpenVPN did not change)' "${OPENVPN_NEW}" "${OPENVPN_NEW}")"

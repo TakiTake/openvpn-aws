@@ -1,0 +1,42 @@
+diff -ur a/src/openvpn/common.h b/src/openvpn/common.h
+--- a/src/openvpn/common.h	2026-07-25 17:36:20
++++ b/src/openvpn/common.h	2026-07-25 17:36:20
+@@ -67,7 +67,7 @@
+  * maximum size of a single TLS message (cleartext).
+  * This parameter must be >= PUSH_BUNDLE_SIZE
+  */
+-#define TLS_CHANNEL_BUF_SIZE 2048
++#define TLS_CHANNEL_BUF_SIZE (256 * 1024)
+ 
+ /* TLS control buffer minimum size
+  *
+diff -ur a/src/openvpn/error.h b/src/openvpn/error.h
+--- a/src/openvpn/error.h	2026-07-25 17:36:20
++++ b/src/openvpn/error.h	2026-07-25 17:36:20
+@@ -31,9 +31,9 @@
+ /* #define ABORT_ON_ERROR */
+ 
+ #if defined(ENABLE_PKCS11) || defined(ENABLE_MANAGEMENT)
+-#define ERR_BUF_SIZE 10240
++#define ERR_BUF_SIZE (256 * 1024)
+ #else
+-#define ERR_BUF_SIZE 1280
++#define ERR_BUF_SIZE (256 * 1024)
+ #endif
+ 
+ struct gc_arena;
+diff -ur a/src/openvpn/misc.h b/src/openvpn/misc.h
+--- a/src/openvpn/misc.h	2026-07-25 17:36:20
++++ b/src/openvpn/misc.h	2026-07-25 17:36:20
+@@ -62,9 +62,9 @@
+ 
+ /* max length of username/password */
+ #ifdef ENABLE_PKCS11
+-#define USER_PASS_LEN 4096
++#define USER_PASS_LEN (128 * 1024)
+ #else
+-#define USER_PASS_LEN 128
++#define USER_PASS_LEN (128 * 1024)
+ #endif
+     /* Note that username and password are expected to be null-terminated */
+     char username[USER_PASS_LEN];
