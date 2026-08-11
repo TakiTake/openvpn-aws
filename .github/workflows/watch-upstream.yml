@@ -60,6 +60,12 @@ jobs:
             -e "s/^OPENVPN_SHA256=.*/OPENVPN_SHA256=${sha256}/" \
             -e "s/^LAST_BUILT_OPENSSL=.*/LAST_BUILT_OPENSSL=${OPENSSL_NEW}/" \
             versions.env
+          # Prove the bump before opening the PR: bot-created PRs cannot
+          # trigger ci.yml (GITHUB_TOKEN anti-recursion), so this run is the
+          # only automated check the PR gets. A broken patch fails here and
+          # no PR is opened.
+          brew install pkgconf openssl@3
+          ./build.sh
           bot_email="41898282+github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
           git config user.email "$bot_email"
@@ -81,6 +87,6 @@ jobs:
           fi
           git push ${lease:+"$lease"} -u origin "$branch"
           gh pr create --title "Bump to OpenVPN ${OPENVPN_NEW} / OpenSSL ${OPENSSL_NEW}" \
-            --body "Automated upstream bump. CI proves the buffer patch still applies and the build passes.
+            --body "Automated upstream bump. The dispatching run built and verified the patched binary before opening this PR (bot-created PRs cannot trigger CI): ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
 
           Merging releases automatically: the release workflow tags the next \`v${OPENVPN_NEW}-<n>\` and publishes the assets."
