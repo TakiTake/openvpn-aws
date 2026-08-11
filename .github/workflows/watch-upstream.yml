@@ -6,6 +6,11 @@ on:
 permissions:
   contents: write
   pull-requests: write
+# Overlapping runs (cron + manual dispatch) would both pass the open-PR
+# guard and race on the bump branch; queue them instead.
+concurrency:
+  group: watch-upstream
+  cancel-in-progress: false
 jobs:
   check:
     runs-on: macos-15 # arm64, same environment the build uses
@@ -16,6 +21,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -o pipefail
           source ./versions.env
           latest_openvpn="$(gh api repos/OpenVPN/openvpn/releases/latest --jq .tag_name | sed 's/^v//')"
           current_openssl="$(brew info --json=v2 --formula openssl@3 | jq -r '.formulae[0].versions.stable')"
@@ -37,20 +43,42 @@ jobs:
           OPENVPN_NEW: ${{ steps.check.outputs.openvpn_new }}
           OPENSSL_NEW: ${{ steps.check.outputs.openssl_new }}
         run: |
+          set -o pipefail
           branch="bump/openvpn-${OPENVPN_NEW}-openssl-${OPENSSL_NEW}"
-          if gh pr list --head "$branch" --state open --json number --jq length | grep -qv '^0$'; then
-            echo "bump PR already open"; exit 0
-          fi
+          # A gh failure here must abort the run, not read as "no PR exists".
+          # CLOSED (rejected without merge) blocks recreation: closing a bump
+          # PR is how a human rejects this version combo; delete the closed
+          # PR's branch and reopen it if the rejection is reversed.
+          pr_states="$(gh pr list --head "$branch" --state all --json state --jq '[.[].state] | unique | join(",")')"
+          case "$pr_states" in
+            *OPEN*) echo "bump PR already open"; exit 0 ;;
+            *CLOSED*) echo "a bump PR for ${branch} was closed without merging; not recreating it"; exit 0 ;;
+          esac
           sha256="$(curl -fsSL "https://swupdate.openvpn.org/community/releases/openvpn-${OPENVPN_NEW}.tar.gz" | shasum -a 256 | awk '{print $1}')"
           sed -i '' \
             -e "s/^OPENVPN_VERSION=.*/OPENVPN_VERSION=${OPENVPN_NEW}/" \
             -e "s/^OPENVPN_SHA256=.*/OPENVPN_SHA256=${sha256}/" \
             -e "s/^LAST_BUILT_OPENSSL=.*/LAST_BUILT_OPENSSL=${OPENSSL_NEW}/" \
             versions.env
+          bot_email="41898282+github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.email "$bot_email"
           git checkout -b "$branch"
           git commit -am "Bump to OpenVPN ${OPENVPN_NEW} / OpenSSL ${OPENSSL_NEW}"
-          git push -u origin "$branch"
+          # A failed run can leave the branch behind with no PR (e.g. pr
+          # create was rejected); that must not wedge every later run. But
+          # only overwrite the bot's own leftover, and only at the exact tip
+          # inspected here (lease), so human commits are never discarded.
+          lease=""
+          if git fetch origin "refs/heads/${branch}"; then
+            tip="$(git rev-parse FETCH_HEAD)"
+            if [ "$(git log -1 --format=%ae FETCH_HEAD)" = "$bot_email" ]; then
+              lease="--force-with-lease=refs/heads/${branch}:${tip}"
+            else
+              echo "refusing to overwrite ${branch}: tip ${tip} is not a bot commit" >&2
+              exit 1
+            fi
+          fi
+          git push ${lease:+"$lease"} -u origin "$branch"
           gh pr create --title "Bump to OpenVPN ${OPENVPN_NEW} / OpenSSL ${OPENSSL_NEW}" \
             --body "$(printf 'Automated upstream bump. CI proves the buffer patch still applies and the build passes.\n\nAfter merging, tag to release:\n\n```\ngit tag v%s-0 && git push origin v%s-0\n```\n(bump the trailing build number instead if OpenVPN did not change)' "${OPENVPN_NEW}" "${OPENVPN_NEW}")"
