@@ -20,4 +20,5 @@ jobs:
           gh release create "${GITHUB_REF_NAME}" \
             --title "${GITHUB_REF_NAME}" \
             --notes "$(printf 'Patched OpenVPN for AWS Client VPN SAML federation (see README).\n\n%s\n\n```\n%s\n```' "$(cat dist/BUILDINFO)" "$(cat dist/SHA256SUMS)")" \
-            dist/openvpn-aws-*.tar.gz
+            dist/openvpn-aws-*.tar.gz \
+            dist/openvpn-aws-*.tar.gz.sha256

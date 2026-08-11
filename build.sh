@@ -56,4 +56,13 @@ tar -czf "$OUT/openvpn-aws-${TAG}-aarch64-apple-darwin.tar.gz" -C "$STAGE" .
 make -C "$SRC" distclean >/dev/null 2>&1 || true
 tar -czf "$OUT/openvpn-aws-${TAG}-src.tar.gz" -C "$WORK" "openvpn-${OPENVPN_VERSION}"
 echo "built with OpenSSL ${OPENSSL_VERSION}" >"$OUT/BUILDINFO"
-shasum -a 256 "$OUT"/openvpn-aws-*.tar.gz | tee "$OUT/SHA256SUMS"
+(
+  cd "$OUT"
+  # One .sha256 per asset, published with the release so downloads can be
+  # checked against a repo-published sum (transfer integrity, not authenticity).
+  # Format matches pall8t: hash, two spaces, basename.
+  for f in openvpn-aws-*.tar.gz; do
+    shasum -a 256 "$f" >"$f.sha256"
+  done
+  cat openvpn-aws-*.tar.gz.sha256 | tee SHA256SUMS
+)
