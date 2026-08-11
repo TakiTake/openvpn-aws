@@ -51,6 +51,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$branch"
           git commit -am "Bump to OpenVPN ${OPENVPN_NEW} / OpenSSL ${OPENSSL_NEW}"
-          git push -u origin "$branch"
+          # Force: a failed run can leave the branch behind with no open PR
+          # (e.g. pr create was rejected); it must not wedge every later run.
+          git push --force -u origin "$branch"
           gh pr create --title "Bump to OpenVPN ${OPENVPN_NEW} / OpenSSL ${OPENSSL_NEW}" \
             --body "$(printf 'Automated upstream bump. CI proves the buffer patch still applies and the build passes.\n\nAfter merging, tag to release:\n\n```\ngit tag v%s-0 && git push origin v%s-0\n```\n(bump the trailing build number instead if OpenVPN did not change)' "${OPENVPN_NEW}" "${OPENVPN_NEW}")"
