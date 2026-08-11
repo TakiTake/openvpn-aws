@@ -81,4 +81,6 @@ jobs:
           fi
           git push ${lease:+"$lease"} -u origin "$branch"
           gh pr create --title "Bump to OpenVPN ${OPENVPN_NEW} / OpenSSL ${OPENSSL_NEW}" \
-            --body "$(printf 'Automated upstream bump. CI proves the buffer patch still applies and the build passes.\n\nAfter merging, tag to release:\n\n```\ngit tag v%s-0 && git push origin v%s-0\n```\n(bump the trailing build number instead if OpenVPN did not change)' "${OPENVPN_NEW}" "${OPENVPN_NEW}")"
+            --body "Automated upstream bump. CI proves the buffer patch still applies and the build passes.
+
+          Merging releases automatically: the release workflow tags the next \`v${OPENVPN_NEW}-<n>\` and publishes the assets."
