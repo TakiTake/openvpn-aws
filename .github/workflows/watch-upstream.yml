@@ -15,7 +15,7 @@ jobs:
   check:
     runs-on: macos-15 # arm64, same environment the build uses
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Compare pinned versions with upstream
         id: check
         env:
